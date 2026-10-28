@@ -1,12 +1,12 @@
 """
 Pipeline Runner CLI: Orquestador y Ejecutor de Pruebas INF-522.
 Permite ejecutar y verificar el flujo completo de datos de forma reproducible:
-- Inicialización de Base de Datos (DDL)
+- Inicialización y Limpieza Determinista de Base de Datos (DDL / TRUNCATE)
 - Ejecución de ETL ESO (DAG 1)
 - Ejecución de ETL ALeRCE (DAG 2)
 - Ejecución de KPIs Mart (DAG 3)
 - Demostración de Falla Controlada en Vivo
-- Reporte de Auditoría y Verificación de Datos
+- Reporte de Auditoría y Verificación de Datos sin Ocultamiento
 """
 
 import os
@@ -21,14 +21,14 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import psycopg2
 from src.config import get_connection, ESO_API_URL, ALERCE_API_URL, DEFAULT_MJD_INICIO, DEFAULT_MJD_FIN
 from src.audit import registrar_auditoria
-from src.extract_eso import validar_api_eso, extraer_eso_raw, guardar_eso_raw
-from src.extract_alerce import validar_api_alerce, extraer_alerce_raw, guardar_alerce_raw
+from src.extract_eso import validar_api_eso, extraer_eso_raw, guardar_eso_raw, leer_eso_raw
+from src.extract_alerce import validar_api_alerce, extraer_alerce_raw, guardar_alerce_raw, leer_alerce_raw
 from src.transform import transformar_eso, transformar_alerce
 from src.load import cargar_eso_pipeline, cargar_alerce_pipeline
 from src.kpi_calculator import ejecutar_kpis_mart
 
-def init_db():
-    """Ejecuta el DDL de estructura en PostgreSQL."""
+def init_db(clean=False):
+    """Ejecuta el DDL de estructura en PostgreSQL y opcionalmente limpia datos previos."""
     print("==================================================")
     print("1. INICIALIZANDO ESQUEMAS Y TABLAS POSTGRESQL...")
     print("==================================================")
@@ -39,7 +39,37 @@ def init_db():
         with conn.cursor() as cur:
             cur.execute(sql)
         conn.commit()
-        print("[OK] Esquemas raw, staging, dw, mart y tabla public.etl_audit creados.")
+        print("[OK] Esquemas raw, staging, dw, mart y tabla public.etl_audit verificados.")
+        
+        if clean:
+            clean_db()
+    finally:
+        conn.close()
+
+def clean_db():
+    """
+    Limpia las tablas de datos (DW, Staging, Raw) para garantizar que las ejecuciones
+    de prueba sean deterministas y no acumulen silenciosamente datos de rangos dispares.
+    """
+    print("  [LIMPIEZA] Truncando tablas para iniciar en estado limpio...")
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                TRUNCATE TABLE 
+                    dw.fact_observaciones_eso, 
+                    dw.fact_alertas_alerce,
+                    staging.stg_eso_observations, 
+                    staging.stg_alerce_objects,
+                    raw.eso_observations_raw, 
+                    raw.alerce_objects_raw,
+                    dw.dim_tiempo, 
+                    dw.dim_instrumento, 
+                    dw.dim_banda_cielo
+                CASCADE;
+            """)
+        conn.commit()
+        print("  [OK] Tablas limpiadas exitosamente (CASCADE).")
     finally:
         conn.close()
 
@@ -66,7 +96,7 @@ def run_etl_eso(mjd_inicio=DEFAULT_MJD_INICIO, mjd_fin=DEFAULT_MJD_FIN, limite=1
         # Paso 3: Transformación
         print("  [3/4] Transformando datos (conversión MJD->DATE, normalización, banda 10°)...")
         df_limpio, metricas = transformar_eso(payload)
-        print(f"  [OK] {metricas['filas_limpias']}/{metricas['filas_leidas']} registros válidos (% nulos inicial: {metricas['porcentaje_nulos']}%).")
+        print(f"  [OK] {metricas['filas_limpias']} observaciones científicas consolidadas de {metricas['filas_leidas']} productos (% nulos modelo: {metricas['porcentaje_nulos']}%).")
 
         # Paso 4: Carga e Idempotencia
         print("  [4/4] Cargando en Staging y DW (Star Schema)...")
@@ -127,7 +157,7 @@ def run_etl_alerce(mjd_inicio=DEFAULT_MJD_INICIO, mjd_fin=DEFAULT_MJD_FIN, max_p
         # Paso 3: Transformación
         print("  [3/4] Transformando datos (conversión MJD->DATE, validación ML, banda 10°)...")
         df_limpio, metricas = transformar_alerce(paginas)
-        print(f"  [OK] {metricas['filas_limpias']}/{metricas['filas_leidas']} alertas válidas (% nulos inicial: {metricas['porcentaje_nulos']}%).")
+        print(f"  [OK] {metricas['filas_limpias']}/{metricas['filas_leidas']} alertas válidas desduplicadas (% nulos modelo: {metricas['porcentaje_nulos']}%).")
 
         # Paso 4: Carga e Idempotencia
         print("  [4/4] Cargando en Staging y DW (Star Schema)...")
@@ -170,7 +200,7 @@ def run_mart(run_id=None):
     run_id = run_id or f"manual_mart_{int(time.time())}"
     print(f"\n>>> [DAG 3] Calculando los 5 Indicadores de Gestión en Capa MART...")
     res = ejecutar_kpis_mart(run_id=run_id)
-    print(f"  [OK] Tablas de indicadores actualizadas en {res['duracion_segundos']}s.")
+    print(f"  [OK] Tablas de indicadores actualizadas en {res['duracion_segundos']}s ({res['filas_leidas_dw']} hechos leídos -> {res['total_filas_kpi']} filas KPI generadas).")
     for k, v in res.items():
         if k.startswith("mart."):
             print(f"    - {k}: {v} filas generadas")
@@ -259,17 +289,31 @@ def show_audit():
         conn.close()
 
 def show_kpis():
-    """Muestra un resumen de los 5 Indicadores de Gestión calculados."""
+    """Muestra un resumen transparente y completo de los 5 Indicadores de Gestión calculados."""
     print("\n==================================================")
     print("RESUMEN DE LOS 5 INDICADORES DE GESTIÓN (Capa MART)")
     print("==================================================")
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            print("\n[KPI 1] Horas Efectivas de Exposición Diaria (Top 5):")
-            cur.execute("SELECT fecha_id, facility_name, instrument_name, horas_efectivas_exposicion, estado_meta FROM mart.kpi_horas_efectivas_exposicion LIMIT 5;")
+            # Resumen global de registros en el DW
+            cur.execute("SELECT MIN(fecha_id), MAX(fecha_id), COUNT(*) FROM dw.fact_observaciones_eso;")
+            eso_min, eso_max, eso_cnt = cur.fetchone()
+            cur.execute("SELECT MIN(fecha_id), MAX(fecha_id), COUNT(*) FROM dw.fact_alertas_alerce;")
+            al_min, al_max, al_cnt = cur.fetchone()
+            print(f"[METRICAS GLOBALES DW]")
+            print(f"  - Hechos ESO: {eso_cnt} observaciones | Rango fechas: {eso_min} a {eso_max}")
+            print(f"  - Hechos ALeRCE: {al_cnt} alertas | Rango fechas: {al_min} a {al_max}")
+
+            print("\n[KPI 1] Horas Efectivas de Exposición Diaria por Instalación (Top 5):")
+            cur.execute("""
+                SELECT fecha_id, facility_name, instrumentos_operativos, horas_efectivas_exposicion, estado_meta 
+                FROM mart.kpi_horas_efectivas_exposicion 
+                ORDER BY fecha_id DESC, horas_efectivas_exposicion DESC
+                LIMIT 5;
+            """)
             for r in cur.fetchall():
-                print(f"  {r[0]} | {r[1]} | {r[2]} | {r[3]} hrs | {r[4]}")
+                print(f"  {r[0]} | Instalación: {r[1]} [{r[2]}] | {r[3]} hrs | {r[4]}")
 
             print("\n[KPI 2] Volumen Diario Generado (GB/día) (Top 5):")
             cur.execute("SELECT fecha_id, cantidad_archivos_generados, volumen_total_gb, estado_almacenamiento FROM mart.kpi_volumen_datos_diario LIMIT 5;")
@@ -286,17 +330,29 @@ def show_kpis():
             for r in cur.fetchall():
                 print(f"  {r[0]} | {r[1]} | {r[2]} alertas | {r[3]}% conf | {r[4]}")
 
-            print("\n[KPI 5] Cobertura de Seguimiento por Banda de Cielo (Cruce ESO vs ALeRCE) (Top 5):")
-            cur.execute("SELECT fecha_id, banda_declinacion, hemisferio, minutos_exposicion_eso, total_alertas_alerce, ratio_minutos_eso_por_alerta, diagnostico_operacional FROM mart.kpi_cobertura_cielo_diaria LIMIT 5;")
+            print("\n[KPI 5] Cobertura de Seguimiento por Banda de Cielo (Cruce ESO vs ALeRCE):")
+            cur.execute("""
+                SELECT fecha_id, banda_declinacion, hemisferio, minutos_exposicion_eso, 
+                       total_alertas_alerce, ratio_minutos_eso_por_alerta, diagnostico_operacional 
+                FROM mart.kpi_cobertura_cielo_diaria 
+                ORDER BY fecha_id DESC, minutos_exposicion_eso DESC, total_alertas_alerce DESC
+                LIMIT 8;
+            """)
             for r in cur.fetchall():
-                print(f"  {r[0]} | Banda {r[1]} ({r[2]}) | ESO: {r[3]} min | ALeRCE: {r[4]} | Ratio: {r[5]} min/alerta | {r[6]}")
+                ratio_str = f"{r[5]} min/alerta" if r[5] is not None else "N/A (0 alertas)"
+                print(f"  {r[0]} | Banda {r[1]:<10} ({r[2]:<7}) | ESO: {r[3]:<6} min | ALeRCE: {r[4]:<3} | Ratio: {ratio_str:<16} | {r[6]}")
     finally:
         conn.close()
 
 if __name__ == "__main__":
-    cmd = sys.argv[1] if len(sys.argv) > 1 else "run-all"
+    args = sys.argv[1:]
+    cmd = args[0] if args else "run-all"
+    clean_flag = "--clean" in args
+
     if cmd == "init-db":
-        init_db()
+        init_db(clean=clean_flag)
+    elif cmd == "clean-db":
+        clean_db()
     elif cmd == "run-eso":
         run_etl_eso()
     elif cmd == "run-alerce":
@@ -304,7 +360,7 @@ if __name__ == "__main__":
     elif cmd == "run-mart":
         run_mart()
     elif cmd == "run-all":
-        init_db()
+        init_db(clean=True)  # Limpieza determinista por defecto para evitar acumulaciones silenciosas
         run_etl_eso()
         run_etl_alerce()
         run_mart()
@@ -319,4 +375,4 @@ if __name__ == "__main__":
         show_kpis()
     else:
         print(f"Comando desconocido: {cmd}")
-        print("Comandos válidos: init-db, run-eso, run-alerce, run-mart, run-all, demo-failure, show-audit, show-kpis")
+        print("Comandos válidos: init-db [--clean], clean-db, run-eso, run-alerce, run-mart, run-all, demo-failure, show-audit, show-kpis")

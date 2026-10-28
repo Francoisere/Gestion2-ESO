@@ -9,7 +9,7 @@
 -- ----------------------------------------------------------------------------
 -- INDICADOR 1: Horas Efectivas de Exposición Científica Diaria
 -- Objetivo: Medir el aprovechamiento productivo del tiempo nocturno en telescopios
---           de ESO en Chile por instalación e instrumento.
+--           de ESO en Chile por instalación (facility) de forma conjunta.
 -- Meta/Umbral: >= 8.0 horas conjuntas por noche por instalación.
 -- ----------------------------------------------------------------------------
 DROP TABLE IF EXISTS mart.kpi_horas_efectivas_exposicion;
@@ -20,7 +20,7 @@ SELECT
     t.mes,
     t.dia_semana,
     inst.facility_name,
-    inst.instrument_name,
+    STRING_AGG(DISTINCT inst.instrument_name, ', ' ORDER BY inst.instrument_name) AS instrumentos_operativos,
     COUNT(f.obs_id) AS total_observaciones,
     ROUND(SUM(f.tiempo_exposicion_seg), 2) AS total_segundos_exposicion,
     ROUND(SUM(f.tiempo_exposicion_seg) / 3600.0, 2) AS horas_efectivas_exposicion,
@@ -31,7 +31,7 @@ SELECT
 FROM dw.fact_observaciones_eso f
 JOIN dw.dim_tiempo t ON f.fecha_id = t.fecha_id
 JOIN dw.dim_instrumento inst ON f.instrumento_sk = inst.instrumento_sk
-GROUP BY t.fecha_id, t.anio, t.mes, t.dia_semana, inst.facility_name, inst.instrument_name
+GROUP BY t.fecha_id, t.anio, t.mes, t.dia_semana, inst.facility_name
 ORDER BY t.fecha_id DESC, horas_efectivas_exposicion DESC;
 
 -- ----------------------------------------------------------------------------
@@ -119,8 +119,8 @@ ORDER BY t.fecha_id DESC, total_alertas_detectadas DESC;
 
 -- ----------------------------------------------------------------------------
 -- INDICADOR 5: Cobertura de Seguimiento en Chile por Banda del Cielo (Cruce ESO vs ALeRCE)
--- Objetivo: Identificar qué franjas de declinación con alta densidad de alertas
---           están siendo cubiertas con tiempo de exposición en telescopios chilenos.
+-- Objetivo: Identificar qué franjas de declinación con alertas están siendo cubiertas
+--           con tiempo de exposición en telescopios chilenos en la misma fecha.
 -- Meta/Umbral: >= 5.0 minutos de exposición por alerta en hemisferio austral (dec < 0°).
 -- ----------------------------------------------------------------------------
 DROP TABLE IF EXISTS mart.kpi_cobertura_cielo_diaria;
@@ -132,16 +132,31 @@ SELECT
     COALESCE(eso.total_obs_eso, 0) AS total_observaciones_eso,
     ROUND(COALESCE(eso.segundos_exposicion, 0) / 60.0, 2) AS minutos_exposicion_eso,
     COALESCE(al.total_alertas_alerce, 0) AS total_alertas_alerce,
-    ROUND(
-        (COALESCE(eso.segundos_exposicion, 0) / 60.0) / NULLIF(al.total_alertas_alerce, 0), 
-        2
-    ) AS ratio_minutos_eso_por_alerta,
     CASE 
-        WHEN b.hemisferio = 'Austral' AND ((COALESCE(eso.segundos_exposicion, 0) / 60.0) / NULLIF(al.total_alertas_alerce, 0)) >= 5.0 
+        WHEN COALESCE(al.total_alertas_alerce, 0) > 0 
+            THEN ROUND((COALESCE(eso.segundos_exposicion, 0) / 60.0) / al.total_alertas_alerce, 2)
+        ELSE NULL 
+    END AS ratio_minutos_eso_por_alerta,
+    CASE 
+        -- 1. Banda Austral con Alertas y Cobertura ESO >= 5 min/alerta
+        WHEN b.hemisferio = 'Austral' AND COALESCE(al.total_alertas_alerce, 0) > 0 
+             AND ((COALESCE(eso.segundos_exposicion, 0) / 60.0) / al.total_alertas_alerce) >= 5.0 
             THEN 'COBERTURA ÓPTIMA (>= 5 min/alerta)'
-        WHEN b.hemisferio = 'Austral' AND al.total_alertas_alerce > 0 AND (eso.total_obs_eso IS NULL OR eso.total_obs_eso = 0)
+        -- 2. Banda Austral con Alertas y Cobertura ESO < 5 min/alerta
+        WHEN b.hemisferio = 'Austral' AND COALESCE(al.total_alertas_alerce, 0) > 0 
+             AND COALESCE(eso.segundos_exposicion, 0) > 0
+             AND ((COALESCE(eso.segundos_exposicion, 0) / 60.0) / al.total_alertas_alerce) < 5.0 
+            THEN 'COBERTURA PARCIAL (< 5 min/alerta)'
+        -- 3. Banda Austral con Alertas pero 0 tiempo ESO (Déficit de seguimiento)
+        WHEN b.hemisferio = 'Austral' AND COALESCE(al.total_alertas_alerce, 0) > 0 
+             AND (eso.total_obs_eso IS NULL OR eso.total_obs_eso = 0)
             THEN 'DÉFICIT SEGUIMIENTO (0 min exposición)'
-        ELSE 'COBERTURA MODERADA / BOREAL'
+        -- 4. Banda Austral con tiempo ESO pero sin Alertas activas en esa fecha
+        WHEN b.hemisferio = 'Austral' AND (al.total_alertas_alerce IS NULL OR al.total_alertas_alerce = 0) 
+             AND COALESCE(eso.total_obs_eso, 0) > 0
+            THEN 'OBSERVACIÓN AUSTRAL (Sin alertas activas)'
+        -- 5. Hemisferio Boreal
+        ELSE 'HEMISFERIO BOREAL'
     END AS diagnostico_operacional
 FROM dw.dim_tiempo t
 CROSS JOIN dw.dim_banda_cielo b

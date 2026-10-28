@@ -341,11 +341,11 @@ def crear_presentacion():
     add_card(s8, Inches(0.8), Inches(1.8), Inches(3.6), Inches(5.0),
              "KPI 1: Horas Efectivas de Exposición",
              [
-                 "Fórmula: SUM(tiempo_exposicion_seg) / 3600.",
-                 "Objetivo: Medir el aprovechamiento nocturno en Paranal y La Silla por telescopio e instrumento.",
+                 "Fórmula: SUM(tiempo_exposicion_seg) / 3600 por instalación (facility).",
+                 "Objetivo: Medir el aprovechamiento nocturno conjunto en Paranal, La Silla y Chajnantor.",
                  "Periodicidad: Diaria.",
                  "Meta: >= 8.0 horas conjuntas por instalación.",
-                 "Hallazgo: Telescopios como FEROS y HARPS alcanzan entre 4 y 7 horas útiles por noche despejada."
+                 "Hallazgo: Telescopios como ESO-3.6 (HARPS + NIRPS) y ALMA acumulan entre 5 y 8 horas de observación útil por noche."
              ],
              "PRODUCTIVIDAD OBSERVACIONAL")
 
@@ -393,10 +393,11 @@ def crear_presentacion():
              "KPI 5: Cobertura de Seguimiento por Banda (Cruce)",
              [
                  "Fórmula: Minutos Exposición ESO / N° Alertas ALeRCE en misma fecha y franja de 10°.",
-                 "Objetivo: Identificar 'zonas ciegas' donde surgen muchas alertas en cielo chileno pero falta tiempo de telescopio.",
+                 "Objetivo: Identificar zonas del cielo con alertas transitorias frente al tiempo de seguimiento asignado en Chile.",
                  "Periodicidad: Diaria / Semanal.",
                  "Meta: >= 5.0 min/alerta en Hemisferio Austral (dec < 0°).",
-                 "Hallazgo: Se detectaron bandas australes con déficit de seguimiento (0 min de exposición frente a decenas de alertas)."
+                 "Ramas de Diagnóstico: Cobertura óptima (>= 5 min), parcial (< 5 min), déficit (0 min) y observación austral sin alertas activas.",
+                 "Hallazgo: En octubre 2026 se observan bandas australes con seguimiento intensivo de ESO y franjas con alertas transitorias en espera de seguimiento."
              ],
              "INDICADOR DE CRUCE PRINCIPAL")
 

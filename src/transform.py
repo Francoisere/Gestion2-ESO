@@ -68,10 +68,12 @@ def transformar_eso(raw_payload: dict) -> tuple[pd.DataFrame, dict]:
     
     df = pd.DataFrame(rows, columns=metadata)
     
-    # Métricas previas de nulos
-    nulos_totales = df.isna().sum().sum()
-    celdas_totales = df.shape[0] * df.shape[1]
-    pct_nulos_inicial = round((nulos_totales / celdas_totales) * 100.0, 2) if celdas_totales > 0 else 0.0
+    # Métricas de nulos sobre las columnas del modelo dimensional (no sobre metadatos residuales)
+    cols_modelo = ["obs_id", "facility_name", "instrument_name", "dataproduct_type", "calib_level", "t_min", "t_exptime", "access_estsize", "s_ra", "s_dec"]
+    cols_evaluar = [c for c in cols_modelo if c in df.columns]
+    nulos_modelo = df[cols_evaluar].isna().sum().sum()
+    celdas_modelo = len(df) * len(cols_evaluar)
+    pct_nulos_inicial = round((nulos_modelo / celdas_modelo) * 100.0, 2) if celdas_modelo > 0 else 0.0
 
     # 1. Renombrado de Columnas
     df = df.rename(columns={
@@ -147,10 +149,12 @@ def transformar_alerce(paginas_extraidas: list) -> tuple[pd.DataFrame, dict]:
 
     df = pd.DataFrame(todos_items)
 
-    # Métricas de nulos
-    nulos_totales = df.isna().sum().sum()
-    celdas_totales = df.shape[0] * df.shape[1]
-    pct_nulos_inicial = round((nulos_totales / celdas_totales) * 100.0, 2) if celdas_totales > 0 else 0.0
+    # Métricas de nulos calculadas sobre las columnas requeridas por el modelo DW
+    cols_modelo = ["oid", "class", "classifier", "probability", "ndet", "lastmjd", "meanra", "meandec"]
+    cols_evaluar = [c for c in cols_modelo if c in df.columns]
+    nulos_modelo = df[cols_evaluar].isna().sum().sum()
+    celdas_modelo = len(df) * len(cols_evaluar)
+    pct_nulos_inicial = round((nulos_modelo / celdas_modelo) * 100.0, 2) if celdas_modelo > 0 else 0.0
 
     # 1. Renombrado de Columnas
     df = df.rename(columns={

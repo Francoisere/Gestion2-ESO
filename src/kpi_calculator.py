@@ -26,6 +26,14 @@ def ejecutar_kpis_mart(run_id: str = "manual_mart_run") -> dict:
 
         # Medir filas generadas en cada tabla del mart
         with conn.cursor() as cur:
+            # Filas leídas desde el DW dimensional (hechos de ESO y ALeRCE)
+            cur.execute("""
+                SELECT 
+                    (SELECT COUNT(*) FROM dw.fact_observaciones_eso) + 
+                    (SELECT COUNT(*) FROM dw.fact_alertas_alerce);
+            """)
+            filas_leidas_dw = cur.fetchone()[0]
+
             tablas = [
                 "mart.kpi_horas_efectivas_exposicion",
                 "mart.kpi_volumen_datos_diario",
@@ -45,7 +53,7 @@ def ejecutar_kpis_mart(run_id: str = "manual_mart_run") -> dict:
             dag_id="dag_3_kpi_mart_astronomico",
             run_id=run_id,
             fuente="dw_star_schema",
-            filas_leidas=total_filas,
+            filas_leidas=filas_leidas_dw,
             filas_cargadas=total_filas,
             porcentaje_nulos=0.0,
             duracion_segundos=duracion,
@@ -53,6 +61,7 @@ def ejecutar_kpis_mart(run_id: str = "manual_mart_run") -> dict:
             mensaje_error=None
         )
         resultados["duracion_segundos"] = duracion
+        resultados["filas_leidas_dw"] = filas_leidas_dw
         resultados["total_filas_kpi"] = total_filas
         return resultados
     except Exception as e:

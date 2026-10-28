@@ -593,7 +593,7 @@ def generar_pdf():
         cur = conn.cursor()
 
         # Tabla Muestra KPI 1
-        cur.execute("SELECT fecha_id, facility_name, instrument_name, horas_efectivas_exposicion, estado_meta FROM mart.kpi_horas_efectivas_exposicion LIMIT 4;")
+        cur.execute("SELECT fecha_id, facility_name, instrumentos_operativos, horas_efectivas_exposicion, estado_meta FROM mart.kpi_horas_efectivas_exposicion LIMIT 4;")
         kpi1_rows = cur.fetchall()
 
         # Tabla Muestra KPI 4
@@ -866,7 +866,18 @@ def generar_pdf():
         doc.build(story, canvasmaker=NumberedCanvas)
         print(f"[OK] Informe PDF generado exitosamente en: {pdf_path}")
     except PermissionError:
-        print(f"[AVISO] El archivo {pdf_path} está abierto en un visor de PDF. Ciérralo si deseas sobrescribirlo.")
+        fallback_path = "informe/Informe_INF522_Gestion_Datos_Astronomicos_actualizado.pdf"
+        fallback_doc = SimpleDocTemplate(
+            fallback_path,
+            pagesize=letter,
+            leftMargin=54,
+            rightMargin=54,
+            topMargin=54,
+            bottomMargin=54
+        )
+        fallback_doc.build(story, canvasmaker=NumberedCanvas)
+        print(f"[AVISO] El archivo principal {pdf_path} está abierto en Adobe Acrobat u otro visor.")
+        print(f"[OK] Copia idéntica y actualizada generada en: {fallback_path}")
 
 if __name__ == "__main__":
     generar_pdf()

@@ -89,29 +89,38 @@ def task_validar_api(**context):
 
 def task_extraer_y_guardar_raw(**context):
     url = Variable.get("eso_api_url", default_var=ESO_API_URL)
+    mjd_inicio = float(Variable.get("eso_mjd_inicio", default_var=DEFAULT_MJD_INICIO))
+    mjd_fin = float(Variable.get("eso_mjd_fin", default_var=DEFAULT_MJD_FIN))
     run_id = str(context.get("run_id", f"run_{datetime.utcnow().timestamp()}"))
-    payload = extraer_eso_raw(base_url=url, mjd_inicio=61300.0, mjd_fin=61350.0, limite=1000)
+    
+    t0 = datetime.now()
+    payload = extraer_eso_raw(base_url=url, mjd_inicio=mjd_inicio, mjd_fin=mjd_fin, limite=1000)
+    duracion_ext = round((datetime.now() - t0).total_seconds(), 2)
+    
     raw_id = guardar_eso_raw(payload, run_id)
-    # Pasar información ligera mediante XCom
     context["ti"].xcom_push(key="raw_id", value=raw_id)
     context["ti"].xcom_push(key="run_id", value=run_id)
+    context["ti"].xcom_push(key="duracion_ext", value=duracion_ext)
     return raw_id
 
 def task_transformar_y_cargar_dw(**context):
     ti = context["ti"]
     run_id = ti.xcom_pull(task_ids="extraer_eso_raw_task", key="run_id") or str(context.get("run_id"))
+    duracion_ext = float(ti.xcom_pull(task_ids="extraer_eso_raw_task", key="duracion_ext") or 0.0)
     url = Variable.get("eso_api_url", default_var=ESO_API_URL)
+    mjd_inicio = float(Variable.get("eso_mjd_inicio", default_var=DEFAULT_MJD_INICIO))
+    mjd_fin = float(Variable.get("eso_mjd_fin", default_var=DEFAULT_MJD_FIN))
     
+    t0 = datetime.now()
     # Leer de la capa RAW inmutable previamente persistida
     payload = leer_eso_raw(run_id)
     if not payload:
-        payload = extraer_eso_raw(base_url=url, mjd_inicio=61300.0, mjd_fin=61350.0, limite=1000)
+        payload = extraer_eso_raw(base_url=url, mjd_inicio=mjd_inicio, mjd_fin=mjd_fin, limite=1000)
         
     df_limpio, metricas = transformar_eso(payload)
-    
-    t0 = datetime.now()
     filas_cargadas = cargar_eso_pipeline(df_limpio)
-    duracion = round((datetime.now() - t0).total_seconds(), 2)
+    duracion_proc = round((datetime.now() - t0).total_seconds(), 2)
+    duracion_total = round(duracion_ext + duracion_proc, 2)
 
     registrar_auditoria(
         dag_id="dag_1_etl_eso_archive",
@@ -120,7 +129,7 @@ def task_transformar_y_cargar_dw(**context):
         filas_leidas=metricas["filas_leidas"],
         filas_cargadas=filas_cargadas,
         porcentaje_nulos=metricas["porcentaje_nulos"],
-        duracion_segundos=duracion,
+        duracion_segundos=duracion_total,
         estado="SUCCESS",
         mensaje_error=None
     )

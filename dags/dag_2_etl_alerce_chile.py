@@ -88,28 +88,38 @@ def task_validar_api(**context):
 
 def task_extraer_y_guardar_raw(**context):
     url = Variable.get("alerce_api_url", default_var=ALERCE_API_URL)
+    mjd_inicio = float(Variable.get("alerce_mjd_inicio", default_var=DEFAULT_MJD_INICIO))
+    mjd_fin = float(Variable.get("alerce_mjd_fin", default_var=DEFAULT_MJD_FIN))
     run_id = str(context.get("run_id", f"run_{datetime.utcnow().timestamp()}"))
-    paginas = extraer_alerce_raw(base_url=url, max_paginas=5, page_size=50)
+    
+    t0 = datetime.now()
+    paginas = extraer_alerce_raw(base_url=url, mjd_inicio=mjd_inicio, mjd_fin=mjd_fin, max_paginas=5, page_size=50)
+    duracion_ext = round((datetime.now() - t0).total_seconds(), 2)
+    
     total_guardadas = guardar_alerce_raw(paginas, run_id)
     context["ti"].xcom_push(key="total_paginas", value=total_guardadas)
     context["ti"].xcom_push(key="run_id", value=run_id)
+    context["ti"].xcom_push(key="duracion_ext", value=duracion_ext)
     return total_guardadas
 
 def task_transformar_y_cargar_dw(**context):
     ti = context["ti"]
     run_id = ti.xcom_pull(task_ids="extraer_alerce_raw_task", key="run_id") or str(context.get("run_id"))
+    duracion_ext = float(ti.xcom_pull(task_ids="extraer_alerce_raw_task", key="duracion_ext") or 0.0)
     url = Variable.get("alerce_api_url", default_var=ALERCE_API_URL)
+    mjd_inicio = float(Variable.get("alerce_mjd_inicio", default_var=DEFAULT_MJD_INICIO))
+    mjd_fin = float(Variable.get("alerce_mjd_fin", default_var=DEFAULT_MJD_FIN))
     
+    t0 = datetime.now()
     # Leer de capa RAW previamente persistida para reproducibilidad
     paginas = leer_alerce_raw(run_id)
     if not paginas:
-        paginas = extraer_alerce_raw(base_url=url, max_paginas=5, page_size=50)
+        paginas = extraer_alerce_raw(base_url=url, mjd_inicio=mjd_inicio, mjd_fin=mjd_fin, max_paginas=5, page_size=50)
         
     df_limpio, metricas = transformar_alerce(paginas)
-    
-    t0 = datetime.now()
     filas_cargadas = cargar_alerce_pipeline(df_limpio)
-    duracion = round((datetime.now() - t0).total_seconds(), 2)
+    duracion_proc = round((datetime.now() - t0).total_seconds(), 2)
+    duracion_total = round(duracion_ext + duracion_proc, 2)
 
     registrar_auditoria(
         dag_id="dag_2_etl_alerce_chile",
@@ -118,7 +128,7 @@ def task_transformar_y_cargar_dw(**context):
         filas_leidas=metricas["filas_leidas"],
         filas_cargadas=filas_cargadas,
         porcentaje_nulos=metricas["porcentaje_nulos"],
-        duracion_segundos=duracion,
+        duracion_segundos=duracion_total,
         estado="SUCCESS",
         mensaje_error=None
     )

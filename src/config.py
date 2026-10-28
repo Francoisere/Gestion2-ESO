@@ -21,10 +21,10 @@ PG_DATABASE = os.getenv("PG_DATABASE", "dw_astronomia")
 ESO_API_URL = os.getenv("ESO_API_URL", "https://archive.eso.org/tap_obs/sync")
 ALERCE_API_URL = os.getenv("ALERCE_API_URL", "https://api.alerce.online/ztf/v1/objects/")
 
-# Rangos MJD por defecto (Ventana representativa de datos solapados: Ago - Nov 2022)
-# MJD 59800 = 2022-08-09 | MJD 59900 = 2022-11-17
-DEFAULT_MJD_INICIO = float(os.getenv("MJD_INICIO", 59800.0))
-DEFAULT_MJD_FIN = float(os.getenv("MJD_FIN", 59900.0))
+# Rangos MJD por defecto sincronizados: Octubre 2026 (Observaciones contemporáneas en Chile)
+# MJD 61300 = 2026-09-17 | MJD 61341 = 2026-10-28 (Detecciones en tiempo real) | MJD 61350 = 2026-11-06
+DEFAULT_MJD_INICIO = float(os.getenv("MJD_INICIO", 61300.0))
+DEFAULT_MJD_FIN = float(os.getenv("MJD_FIN", 61350.0))
 
 def get_connection():
     """Retorna una conexión activa a PostgreSQL."""

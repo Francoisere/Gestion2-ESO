@@ -50,21 +50,23 @@ def extraer_alerce_raw(
     """
     Extrae objetos y alertas astronómicas clasificados por ALeRCE manejando
     paginación ordenada por lastmjd descendente.
+    Usa parámetros tipo lista de tuplas para enviar lastmjd repetido (array en OpenAPI).
     """
     target_url = base_url if base_url.endswith("/") else base_url + "/"
     paginas_extraidas = []
     
     for pagina in range(1, max_paginas + 1):
-        params = {
-            "classifier": "lc_classifier",
-            "page": pagina,
-            "page_size": page_size,
-            "order_by": "lastmjd",
-            "order_mode": "DESC"
-        }
+        params = [
+            ("classifier", "lc_classifier"),
+            ("page", pagina),
+            ("page_size", page_size),
+            ("order_by", "lastmjd"),
+            ("order_mode", "DESC")
+        ]
         if mjd_inicio and mjd_fin:
-            params["firstmjd"] = mjd_inicio
-            params["lastmjd"] = mjd_fin
+            # OpenAPI ALeRCE: lastmjd es un array de rango [mjd_inicio, mjd_fin]
+            params.append(("lastmjd", float(mjd_inicio)))
+            params.append(("lastmjd", float(mjd_fin)))
 
         try:
             resp = requests.get(target_url, params=params, timeout=timeout)
