@@ -1,0 +1,22 @@
+# Entornos virtuales y Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+*.env
+!.env.example
+
+# Logs y bases temporales
+*.log
+airflow.db
+airflow.cfg
+logs/
+
+# Contenedores y datos
+pgdata_dw/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db

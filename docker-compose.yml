@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # 1. Base de Datos PostgreSQL: Metastore de Airflow y Data Warehouse
+  # ============================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: inf522_postgres_dw
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dw_astronomia
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_dw:/var/lib/postgresql/data
+      - ./sql/ddl_estructura.sql:/docker-entrypoint-initdb.d/10_ddl_estructura.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dw_astronomia"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ============================================================================
+  # 2. Apache Airflow (Standalone: Webserver, Scheduler, Metastore y Worker)
+  # ============================================================================
+  airflow:
+    image: apache/airflow:2.8.1-python3.10
+    container_name: inf522_airflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://postgres:postgres@postgres:5432/dw_astronomia
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=False
+      - AIRFLOW__WEBSERVER__SECRET_KEY=inf522_astronomia_super_secret_key_2026
+      # Conexión preconfigurada a DW sin credenciales en código
+      - AIRFLOW_CONN_POSTGRES_DW=postgresql://postgres:postgres@postgres:5432/dw_astronomia
+      # Variables de Airflow preconfiguradas
+      - AIRFLOW_VAR_ESO_API_URL=https://archive.eso.org/tap_obs/sync
+      - AIRFLOW_VAR_ALERCE_API_URL=https://api.alerce.online/ztf/v1/objects
+      # Variables de entorno para scripts ETL
+      - PG_HOST=postgres
+      - PG_PORT=5432
+      - PG_USER=postgres
+      - PG_PASSWORD=postgres
+      - PG_DATABASE=dw_astronomia
+      - PYTHONPATH=/opt/airflow
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./src:/opt/airflow/src
+      - ./sql:/opt/airflow/sql
+    command: >
+      bash -c "
+        pip install --no-cache-dir requests pandas psycopg2-binary &&
+        airflow db init &&
+        airflow users create --username admin --firstname Admin --lastname UCM --role Admin --email admin@inf522.ucm.cl --password admin || true &&
+        airflow standalone
+      "
+    restart: unless-stopped
+
+volumes:
+  pgdata_dw:
+    driver: local
