@@ -75,3 +75,31 @@ def guardar_eso_raw(payload: dict, run_id: str) -> int:
         return raw_id
     finally:
         conn.close()
+
+def leer_eso_raw(run_id: str) -> dict:
+    """
+    Lee el payload crudo previamente almacenado en raw.eso_observations_raw
+    para garantizar reproducibilidad sin volver a consultar la API externa.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT payload
+                FROM raw.eso_observations_raw
+                WHERE run_id = %s
+                ORDER BY raw_id DESC
+                LIMIT 1;
+                """,
+                (run_id,)
+            )
+            row = cur.fetchone()
+            if row:
+                payload = row[0]
+                if isinstance(payload, str):
+                    return json.loads(payload)
+                return payload
+            return {}
+    finally:
+        conn.close()

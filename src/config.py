@@ -19,7 +19,7 @@ PG_DATABASE = os.getenv("PG_DATABASE", "dw_astronomia")
 
 # Endpoints de APIs públicas de Chile
 ESO_API_URL = os.getenv("ESO_API_URL", "https://archive.eso.org/tap_obs/sync")
-ALERCE_API_URL = os.getenv("ALERCE_API_URL", "https://api.alerce.online/ztf/v1/objects")
+ALERCE_API_URL = os.getenv("ALERCE_API_URL", "https://api.alerce.online/ztf/v1/objects/")
 
 # Rangos MJD por defecto (Ventana representativa de datos solapados: Ago - Nov 2022)
 # MJD 59800 = 2022-08-09 | MJD 59900 = 2022-11-17

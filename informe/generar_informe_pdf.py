@@ -862,8 +862,11 @@ def generar_pdf():
     story.append(Paragraph("• Apache Software Foundation. (2026). <i>Apache Airflow Documentation: Architecture, DAGs, and Resilient Task Execution</i>.", bullet_style))
 
     # Construir documento
-    doc.build(story, canvasmaker=NumberedCanvas)
-    print(f"[OK] Informe PDF generado exitosamente en: {pdf_path}")
+    try:
+        doc.build(story, canvasmaker=NumberedCanvas)
+        print(f"[OK] Informe PDF generado exitosamente en: {pdf_path}")
+    except PermissionError:
+        print(f"[AVISO] El archivo {pdf_path} está abierto en un visor de PDF. Ciérralo si deseas sobrescribirlo.")
 
 if __name__ == "__main__":
     generar_pdf()

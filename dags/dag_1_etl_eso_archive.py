@@ -28,7 +28,7 @@ try:
 except ImportError:
     PostgresHook = None
 
-from src.extract_eso import validar_api_eso, extraer_eso_raw, guardar_eso_raw
+from src.extract_eso import validar_api_eso, extraer_eso_raw, guardar_eso_raw, leer_eso_raw
 from src.transform import transformar_eso
 from src.load import cargar_eso_pipeline
 from src.audit import registrar_auditoria
@@ -102,8 +102,11 @@ def task_transformar_y_cargar_dw(**context):
     run_id = ti.xcom_pull(task_ids="extraer_eso_raw_task", key="run_id") or str(context.get("run_id"))
     url = Variable.get("eso_api_url", default_var=ESO_API_URL)
     
-    # Re-extraer o procesar el payload
-    payload = extraer_eso_raw(base_url=url, mjd_inicio=61300.0, mjd_fin=61350.0, limite=1000)
+    # Leer de la capa RAW inmutable previamente persistida
+    payload = leer_eso_raw(run_id)
+    if not payload:
+        payload = extraer_eso_raw(base_url=url, mjd_inicio=61300.0, mjd_fin=61350.0, limite=1000)
+        
     df_limpio, metricas = transformar_eso(payload)
     
     t0 = datetime.now()

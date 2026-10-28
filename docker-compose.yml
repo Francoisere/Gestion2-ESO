@@ -42,7 +42,7 @@ services:
       - AIRFLOW_CONN_POSTGRES_DW=postgresql://postgres:postgres@postgres:5432/dw_astronomia
       # Variables de Airflow preconfiguradas
       - AIRFLOW_VAR_ESO_API_URL=https://archive.eso.org/tap_obs/sync
-      - AIRFLOW_VAR_ALERCE_API_URL=https://api.alerce.online/ztf/v1/objects
+      - AIRFLOW_VAR_ALERCE_API_URL=https://api.alerce.online/ztf/v1/objects/
       # Variables de entorno para scripts ETL
       - PG_HOST=postgres
       - PG_PORT=5432
