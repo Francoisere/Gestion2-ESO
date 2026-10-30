@@ -34,7 +34,7 @@ def init_db(clean=False):
     print("==================================================")
     conn = get_connection()
     try:
-        with open("sql/ddl_estructura.sql", "r", encoding="utf-8") as f:
+        with open("../sql/ddl_estructura.sql", "r", encoding="utf-8") as f:
             sql = f.read()
         with conn.cursor() as cur:
             cur.execute(sql)
