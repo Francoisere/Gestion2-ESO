@@ -3,10 +3,32 @@ Módulo de Cálculo de Indicadores de Gestión (Capa MART).
 Ejecuta las agregaciones dimensionales en SQL y registra trazabilidad en etl_audit.
 """
 
+import os
 import time
 import psycopg2
 from src.config import get_connection
 from src.audit import registrar_auditoria
+
+def _obtener_ruta_sql_kpis() -> str:
+    """Resuelve la ruta absoluta a sql/kpis_mart.sql de forma agnóstica al entorno."""
+    # 1. Relativo a la raíz del proyecto según la ubicación de este archivo
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    candidato = os.path.join(base_dir, "sql", "kpis_mart.sql")
+    if os.path.exists(candidato):
+        return candidato
+    # 2. Relativo al directorio de trabajo actual (CWD)
+    candidato = os.path.join(os.getcwd(), "sql", "kpis_mart.sql")
+    if os.path.exists(candidato):
+        return candidato
+    # 3. Ruta estándar en contenedor Airflow
+    candidato = "/opt/airflow/sql/kpis_mart.sql"
+    if os.path.exists(candidato):
+        return candidato
+    # 4. Fallbacks relativos comunes
+    for rel in ["sql/kpis_mart.sql", "../sql/kpis_mart.sql"]:
+        if os.path.exists(rel):
+            return rel
+    raise FileNotFoundError("No se encontró 'sql/kpis_mart.sql' en las rutas esperadas.")
 
 def ejecutar_kpis_mart(run_id: str = "manual_mart_run") -> dict:
     """
@@ -17,7 +39,8 @@ def ejecutar_kpis_mart(run_id: str = "manual_mart_run") -> dict:
     conn = get_connection()
     resultados = {}
     try:
-        with open("sql/kpis_mart.sql", "r", encoding="utf-8") as f:
+        sql_path = _obtener_ruta_sql_kpis()
+        with open(sql_path, "r", encoding="utf-8") as f:
             sql_script = f.read()
 
         with conn.cursor() as cur:

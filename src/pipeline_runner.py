@@ -27,6 +27,23 @@ from src.transform import transformar_eso, transformar_alerce
 from src.load import cargar_eso_pipeline, cargar_alerce_pipeline
 from src.kpi_calculator import ejecutar_kpis_mart
 
+def _obtener_ruta_sql_ddl() -> str:
+    """Resuelve la ruta a sql/ddl_estructura.sql de forma agnóstica al entorno."""
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    candidato = os.path.join(base_dir, "sql", "ddl_estructura.sql")
+    if os.path.exists(candidato):
+        return candidato
+    candidato = os.path.join(os.getcwd(), "sql", "ddl_estructura.sql")
+    if os.path.exists(candidato):
+        return candidato
+    candidato = "/opt/airflow/sql/ddl_estructura.sql"
+    if os.path.exists(candidato):
+        return candidato
+    for rel in ["sql/ddl_estructura.sql", "../sql/ddl_estructura.sql"]:
+        if os.path.exists(rel):
+            return rel
+    raise FileNotFoundError("No se encontró 'sql/ddl_estructura.sql' en las rutas esperadas.")
+
 def init_db(clean=False):
     """Ejecuta el DDL de estructura en PostgreSQL y opcionalmente limpia datos previos."""
     print("==================================================")
@@ -34,7 +51,8 @@ def init_db(clean=False):
     print("==================================================")
     conn = get_connection()
     try:
-        with open("../sql/ddl_estructura.sql", "r", encoding="utf-8") as f:
+        sql_path = _obtener_ruta_sql_ddl()
+        with open(sql_path, "r", encoding="utf-8") as f:
             sql = f.read()
         with conn.cursor() as cur:
             cur.execute(sql)
