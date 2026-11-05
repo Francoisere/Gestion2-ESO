@@ -213,10 +213,4 @@ Para la presentación ante la comisión evaluadora:
 │   ├── audit.py                                      <- Logger hacia public.etl_audit
 │   ├── kpi_calculator.py                             <- Ejecutor SQL del esquema mart
 │   └── pipeline_runner.py                            <- CLI para pruebas locales y demo de falla
-├── informe/
-│   ├── generar_informe_pdf.py                        <- Script generador del informe en ReportLab
-│   └── Informe_INF522_Gestion_Datos_Astronomicos.pdf  <- Informe técnico formal completo
-└── presentacion/
-    ├── generar_presentacion_pptx.py                  <- Script generador de la presentación
-    └── Presentacion_INF522_Gestion_Datos_Astronomicos.pptx <- Presentación de apoyo (11 láminas)
 ```
